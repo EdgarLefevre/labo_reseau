@@ -166,6 +166,16 @@ On construit le plus petit réseau intéressant :
 
 Note sur Containerlab : l’interface `eth0` de chaque conteneur est l’interface de gestion (réseau Docker). **Tes vrais câbles de labo commencent à `eth1`.**
 
+**Autre particularité : les outils.** L’image FRR est minimale (Alpine) et ne contient ni `tcpdump`, ni `nft`, ni `wg`. Les postes `netshoot`, eux, ont tout. C’est pourquoi, dans les topologies de ce TD, la première ligne `exec` des routeurs est `sh -c "apk add --no-cache tcpdump && sysctl ..."` : elle installe les outils au démarrage (le routeur a accès à Internet via le réseau Docker). Si tu tombes sur `executable file not found`, deux solutions de secours, sans toucher au routeur :
+
+```bash
+# tcpdump de ton Ubuntu, dans l’espace réseau du routeur
+sudo nsenter -t $(docker inspect -f '{{.State.Pid}}' clab-td2-r-siege) -n tcpdump -nei eth1 -c 10
+
+# ou un conteneur netshoot qui partage le réseau du routeur
+docker run --rm -it --network container:clab-td2-r-siege nicolaka/netshoot tcpdump -nei eth1 -c 10
+```
+
 ### Manipulation
 
 Dans `~/reseau-lab/td1/`, crée la structure :
@@ -228,7 +238,7 @@ topology:
         - r1/daemons:/etc/frr/daemons
         - r1/frr.conf:/etc/frr/frr.conf
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
+        - sh -c "apk add --no-cache tcpdump && sysctl -w net.ipv4.ip_forward=1"
         - ip addr add 10.10.10.1/24 dev eth1
         - ip addr add 10.10.20.1/24 dev eth2
     pc1:
@@ -413,7 +423,7 @@ topology:
         - r-siege/daemons:/etc/frr/daemons
         - r-siege/frr.conf:/etc/frr/frr.conf
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
+        - sh -c "apk add --no-cache tcpdump && sysctl -w net.ipv4.ip_forward=1"
         - ip addr add 10.10.10.1/24 dev eth1
         - ip addr add 172.16.0.1/30 dev eth2
     r-agence:
@@ -423,7 +433,7 @@ topology:
         - r-agence/daemons:/etc/frr/daemons
         - r-agence/frr.conf:/etc/frr/frr.conf
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
+        - sh -c "apk add --no-cache tcpdump && sysctl -w net.ipv4.ip_forward=1"
         - ip addr add 10.20.10.1/24 dev eth1
         - ip addr add 172.16.0.2/30 dev eth2
     pc-s:
@@ -581,7 +591,7 @@ topology:
         - r-siege/daemons:/etc/frr/daemons
         - r-siege/frr.conf:/etc/frr/frr.conf
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
+        - sh -c "apk add --no-cache tcpdump && sysctl -w net.ipv4.ip_forward=1"
         - ip link set eth1 up
         - ip link add link eth1 name eth1.10 type vlan id 10
         - ip link add link eth1 name eth1.20 type vlan id 20
@@ -590,7 +600,6 @@ topology:
         - ip link set eth1.10 up
         - ip link set eth1.20 up
         - ip addr add 172.16.0.1/30 dev eth2
-        - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat
     r-agence:
       kind: linux
       image: quay.io/frrouting/frr:10.2.1
@@ -598,7 +607,7 @@ topology:
         - r-agence/daemons:/etc/frr/daemons
         - r-agence/frr.conf:/etc/frr/frr.conf
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
+        - sh -c "apk add --no-cache tcpdump && sysctl -w net.ipv4.ip_forward=1"
         - ip addr add 10.20.10.1/24 dev eth1
         - ip addr add 172.16.0.2/30 dev eth2
     pc-user:
@@ -691,7 +700,7 @@ On ajoute à la topologie du TD3 :
 
 - un nœud `inet` (un « routeur Internet » simulé) avec une adresse `203.0.113.1/24` (plage réservée à la documentation) ;
 - un lien `r-siege:eth3 ↔ inet:eth1` avec `r-siege eth3 = 203.0.113.2/24` ;
-- un serveur `pc-srv` qui joue aussi le rôle de serveur DHCP/DNS.
+- un service DHCP/DNS (dnsmasq) qui tourne **sur `r-siege`**, dans le VLAN 10 (voir plus bas).
 
 **Ajouts dans `topology.yml`** :
 
@@ -718,7 +727,7 @@ nft add rule ip nat postrouting oifname "eth3" masquerade
 '
 ```
 
-(Le conteneur FRR est basé sur Alpine : si `nft` est absent, installe-le avec `apk add nftables` ; sinon utilise `iptables -t nat -A POSTROUTING -o eth3 -j MASQUERADE`.)
+(Le conteneur FRR est basé sur Alpine et n’a pas `nft` par défaut : dans la ligne `apk add` de l’`exec` de `r-siege`, ajoute `nftables`, soit `apk add --no-cache tcpdump nftables dnsmasq`. À défaut, `iptables -t nat -A POSTROUTING -o eth3 -j MASQUERADE` fait la même chose.)
 
 Test :
 
@@ -728,26 +737,82 @@ docker exec clab-td3-pc-user ping -c 3 8.8.8.8
 docker exec clab-td3-inet tcpdump -ni eth1 -c 6 icmp
 ```
 
-**DHCP/DNS avec dnsmasq sur `pc-srv`** : crée `td3/dnsmasq.conf` :
+**DHCP et DNS avec dnsmasq, sur `r-siege`**
+
+Quand un poste démarre sans adresse, il envoie un message en *broadcast* : « y a-t-il un serveur DHCP ? ». Ce message reste dans son VLAN et ne traverse pas un routeur. Le serveur DHCP doit donc se trouver **dans le même VLAN que les postes**. Le plus simple est de le placer sur `r-siege`, qui a déjà une interface dans le VLAN 10 (`eth1.10`, `10.10.10.1`). Un serveur placé ailleurs (par exemple sur `pc-srv`, dans le VLAN 20) exigerait un *relais DHCP* sur le routeur : on n’en a pas besoin ici.
+
+L’échange tient en quatre messages : **Discover** (le poste demande), **Offer** (le serveur propose), **Request** (le poste accepte), **Ack** (le serveur confirme).
+
+**Étape 1 : le fichier de configuration.** Crée `td3/dnsmasq.conf` :
 
 ```
-interface=eth1
+interface=eth1.10
 bind-interfaces
+no-resolv
 domain=lab.local
 local=/lab.local/
-dhcp-range=10.10.10.100,10.10.10.200,12h
+dhcp-range=10.10.10.100,10.10.10.200,255.255.255.0,12h
 dhcp-option=option:router,10.10.10.1
-dhcp-option=option:dns-server,10.10.20.10
+dhcp-option=option:dns-server,10.10.10.1
 address=/srv.lab.local/10.10.20.10
 address=/pc-a.lab.local/10.20.10.10
 ```
 
-Pour que le DHCP franchisse le routeur (un broadcast ne traverse pas un routeur), ajoute un **relais DHCP** sur `r-siege` (par exemple le paquet `dhcp-helper`) ou, pour rester simple dans ce TD, lance un second `dnsmasq` directement dans le VLAN 10. Teste en demandant une adresse depuis un poste :
+| Ligne | Rôle |
+| --- | --- |
+| `interface=eth1.10` et `bind-interfaces` | n’écouter que sur le VLAN 10 |
+| `no-resolv` | ne pas chercher de DNS externe (le labo n’a pas de vrai Internet) |
+| `domain` et `local` | le domaine `lab.local` est géré par ce serveur |
+| `dhcp-range` | adresses distribuées de `.100` à `.200`, bail de 12 h |
+| `dhcp-option router` | la passerelle donnée aux postes |
+| `dhcp-option dns-server` | le serveur DNS donné aux postes (le routeur lui-même) |
+| `address=/nom/IP` | les enregistrements DNS du labo |
+
+**Étape 2 : le monter dans le routeur.** Dans `topology.yml`, pour le nœud `r-siege` : ajoute le fichier dans `binds`, ajoute `nftables dnsmasq` à la ligne `apk add`, et lance le service en **dernière** ligne de l’`exec` (une fois les interfaces créées).
+
+```yaml
+    r-siege:
+      binds:
+        - r-siege/daemons:/etc/frr/daemons
+        - r-siege/frr.conf:/etc/frr/frr.conf
+        - dnsmasq.conf:/etc/dnsmasq.conf
+      exec:
+        - sh -c "apk add --no-cache tcpdump nftables dnsmasq && sysctl -w net.ipv4.ip_forward=1"
+        # ... les lignes ip link / ip addr / ip route inchangées ...
+        - dnsmasq
+```
+
+**Étape 3 : redéployer et vérifier.**
 
 ```bash
-docker exec clab-td3-pc-user dhclient -v eth1   # ou : udhcpc -i eth1
-docker exec clab-td3-pc-user dig @10.10.20.10 srv.lab.local +short
+sudo containerlab destroy -t topology.yml --cleanup
+sudo containerlab deploy -t topology.yml
+docker exec clab-td3-r-siege pgrep -a dnsmasq     # doit afficher un processus
 ```
+
+Si rien ne s’affiche, lance-le à la main : `docker exec clab-td3-r-siege dnsmasq`.
+
+**Étape 4 : tester.** `pc-user` a une adresse fixe donnée par la topologie : on la retire pour qu’il doive la demander.
+
+```bash
+docker exec clab-td3-pc-user ip addr flush dev eth1
+docker exec clab-td3-pc-user ip addr show eth1        # plus d’adresse IPv4
+docker exec clab-td3-pc-user udhcpc -i eth1 -n -q     # ou : dhclient -v eth1
+docker exec clab-td3-pc-user ip addr show eth1        # une adresse entre .100 et .200
+docker exec clab-td3-pc-user ip route                 # la passerelle a été configurée
+
+# Le DNS
+docker exec clab-td3-pc-user dig @10.10.10.1 srv.lab.local +short    # 10.10.20.10
+docker exec clab-td3-pc-user ping -c 2 srv.lab.local
+```
+
+**Étape 5 : voir les quatre messages.** Dans un second terminal, lance la capture, puis relance `udhcpc` :
+
+```bash
+docker exec clab-td3-r-siege tcpdump -ni eth1.10 port 67 or port 68
+```
+
+Tu verras le Discover partir de `0.0.0.0` vers `255.255.255.255` : le poste n’a pas encore d’adresse et s’adresse à tout le monde.
 
 ### Questions
 
@@ -886,6 +951,8 @@ Le LAN (sw1, pc-user, pc-srv) et l’agence (`10.20.10.0/24`) reprennent le TD3.
    - `r-agence` : `default via 192.0.2.9`
 4. Active le NAT (masquerade) sur `r-siege` pour `eth3` et `eth4`, et sur `r-agence` pour `eth2`.
 5. Ajoute `8.8.8.8/32` sur l’interface `lo` du nœud `internet` pour simuler un serveur public.
+
+**Outils sur les routeurs.** Dans la ligne `apk add` de l’`exec` de `r-siege` et de `r-agence`, installe tout ce qui servira : `apk add --no-cache tcpdump nftables wireguard-tools iperf3`. Cette ligne doit rester **la première** : une fois la route par défaut de gestion supprimée (étape 2), `apk` n’a plus accès à Internet.
 
 ### Questions
 
