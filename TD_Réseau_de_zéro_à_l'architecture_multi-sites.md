@@ -590,6 +590,7 @@ topology:
         - ip link set eth1.10 up
         - ip link set eth1.20 up
         - ip addr add 172.16.0.1/30 dev eth2
+        - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat
     r-agence:
       kind: linux
       image: quay.io/frrouting/frr:10.2.1

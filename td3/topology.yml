@@ -1,0 +1,70 @@
+name: td3
+topology:
+  nodes:
+    sw1:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip link add br0 type bridge vlan_filtering 1
+        - ip link set eth1 master br0
+        - ip link set eth2 master br0
+        - ip link set eth3 master br0
+        - ip link set br0 up
+        - bridge vlan add dev eth1 vid 10 pvid untagged
+        - bridge vlan add dev eth2 vid 20 pvid untagged
+        - bridge vlan add dev eth3 vid 10
+        - bridge vlan add dev eth3 vid 20
+        - bridge vlan del dev eth1 vid 1
+        - bridge vlan del dev eth2 vid 1
+        - bridge vlan del dev eth3 vid 1
+    r-siege:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-siege/daemons:/etc/frr/daemons
+        - r-siege/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip link set eth1 up
+        - ip link add link eth1 name eth1.10 type vlan id 10
+        - ip link add link eth1 name eth1.20 type vlan id 20
+        - ip addr add 10.10.10.1/24 dev eth1.10
+        - ip addr add 10.10.20.1/24 dev eth1.20
+        - ip link set eth1.10 up
+        - ip link set eth1.20 up
+        - ip addr add 172.16.0.1/30 dev eth2
+        - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat
+    r-agence:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-agence/daemons:/etc/frr/daemons
+        - r-agence/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 10.20.10.1/24 dev eth1
+        - ip addr add 172.16.0.2/30 dev eth2
+    pc-user:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.10.10/24 dev eth1
+        - ip route replace default via 10.10.10.1
+    pc-srv:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.20.10/24 dev eth1
+        - ip route replace default via 10.10.20.1
+    pc-a:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.20.10.10/24 dev eth1
+        - ip route replace default via 10.20.10.1
+  links:
+    - endpoints: ["pc-user:eth1", "sw1:eth1"]
+    - endpoints: ["pc-srv:eth1", "sw1:eth2"]
+    - endpoints: ["sw1:eth3", "r-siege:eth1"]
+    - endpoints: ["r-siege:eth2", "r-agence:eth2"]
+    - endpoints: ["pc-a:eth1", "r-agence:eth1"]
