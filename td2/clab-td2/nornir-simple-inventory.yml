@@ -1,0 +1,21 @@
+---
+pc-a:
+    username: 
+    password: 
+    platform: linux
+    hostname: 172.20.20.5
+pc-s:
+    username: 
+    password: 
+    platform: linux
+    hostname: 172.20.20.2
+r-agence:
+    username: 
+    password: 
+    platform: linux
+    hostname: 172.20.20.3
+r-siege:
+    username: 
+    password: 
+    platform: linux
+    hostname: 172.20.20.4

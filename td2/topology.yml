@@ -1,0 +1,39 @@
+name: td2
+topology:
+  nodes:
+    r-siege:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-siege/daemons:/etc/frr/daemons
+        - r-siege/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 10.10.10.1/24 dev eth1
+        - ip addr add 172.16.0.1/30 dev eth2
+    r-agence:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-agence/daemons:/etc/frr/daemons
+        - r-agence/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 10.20.10.1/24 dev eth1
+        - ip addr add 172.16.0.2/30 dev eth2
+    pc-s:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.10.10/24 dev eth1
+        - ip route replace default via 10.10.10.1
+    pc-a:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.20.10.10/24 dev eth1
+        - ip route replace default via 10.20.10.1
+  links:
+    - endpoints: ["pc-s:eth1", "r-siege:eth1"]
+    - endpoints: ["r-siege:eth2", "r-agence:eth2"]
+    - endpoints: ["pc-a:eth1", "r-agence:eth1"]
