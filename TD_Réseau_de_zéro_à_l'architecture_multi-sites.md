@@ -754,8 +754,8 @@ local=/lab.local/
 dhcp-range=10.10.10.100,10.10.10.200,255.255.255.0,12h
 dhcp-option=option:router,10.10.10.1
 dhcp-option=option:dns-server,10.10.10.1
-address=/srv.lab.local/10.10.20.10
-address=/pc-a.lab.local/10.20.10.10
+host-record=srv.lab.local,10.10.20.10
+host-record=pc-a.lab.local,10.20.10.10
 ```
 
 | Ligne | Rôle |
@@ -766,7 +766,9 @@ address=/pc-a.lab.local/10.20.10.10
 | `dhcp-range` | adresses distribuées de `.100` à `.200`, bail de 12 h |
 | `dhcp-option router` | la passerelle donnée aux postes |
 | `dhcp-option dns-server` | le serveur DNS donné aux postes (le routeur lui-même) |
-| `address=/nom/IP` | les enregistrements DNS du labo |
+| `host-record=nom,IP` | les enregistrements DNS du labo |
+
+**Pourquoi `host-record` et pas `address=` ?** Un poste demande en parallèle l’adresse IPv4 (`A`) et l’adresse IPv6 (`AAAA`) d’un nom. Avec `address=/nom/IP`, dnsmasq répond `NXDOMAIN` (« ce nom n’existe pas ») à la requête IPv6, et les résolveurs d’Alpine abandonnent alors toute la résolution : `dig @serveur` marche, mais `ping nom` échoue. `host-record` répond correctement « le nom existe, mais sans adresse IPv6 » (`NODATA`). Le symptôme de `nslookup` est reconnaissable : une bonne adresse, suivie de `NXDOMAIN`.
 
 **Étape 2 : le monter dans le routeur.** Dans `topology.yml`, pour le nœud `r-siege` : ajoute le fichier dans `binds`, ajoute `nftables dnsmasq` à la ligne `apk add`, et lance le service en **dernière** ligne de l’`exec` (une fois les interfaces créées).
 
