@@ -904,6 +904,16 @@ Symptôme : l’agence ne joint plus le VLAN 20 mais joint le VLAN 10. Retrouve 
 - **Incident 2** : le masque `/16` fait croire à `pc-user` que `10.10.20.10` est **local** (même réseau). Il l’appelle donc directement en ARP au lieu de passer par la passerelle, et ça échoue. Règle : un masque faux produit des pannes **partielles** et déroutantes, les plus difficiles à trouver.
 - **Incident 3** : `r-agence` n’a plus la route `10.10.20.0/24` car le siège ne l’annonce plus. Prévention : documenter le plan d’adressage et vérifier la table de routage avec un script (semaine 4).
 
+**Attention à la réparation de l’incident 2.** La commande `ip addr flush dev eth1` supprime aussi la **route par défaut** de `pc-user` (Linux retire les routes qui passent par une interface dont on vide les adresses). Remettre le bon masque ne suffit donc pas : le poste joint son propre réseau (`10.10.10.0/24`) et la passerelle, mais plus rien d’autre. Pour réparer complètement :
+
+```bash
+docker exec clab-td3-pc-user ip addr flush dev eth1
+docker exec clab-td3-pc-user ip addr add 10.10.10.10/24 dev eth1
+docker exec clab-td3-pc-user ip route add default via 10.10.10.1
+```
+
+Le réflexe à retenir : après une réparation, **vérifie à nouveau les trois éléments** : adresse et masque (`ip addr`), route par défaut (`ip route`), puis le test de bout en bout. Une panne peut en cacher une seconde, créée par ta propre correction.
+
 ### Checkpoint et bilan de la semaine 2
 
 Tu as : un dépôt Git avec topologies et configs, un plan d’adressage, un schéma (à dessiner avec draw.io) et un journal de 3 incidents. Prépare aussi un **document d’architecture d’une page** : objectif, schéma, plan d’adressage, protocoles utilisés (OSPF, VLAN, NAT, DHCP/DNS).
