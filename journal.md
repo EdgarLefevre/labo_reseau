@@ -25,3 +25,6 @@ Une fois le masque modifié, je ne peux toujours pas ping les autres pc.
 Il manque la route par default qui a été supprimée par le flush. Il faut l'ajouter.
 
 #### Bug 3
+Le fichier resolv.conf n'etait pas bon sur pc-srv et pc-a, modification de topology.yml pour que les fichiers soient bon (sh -c 'cmd', cmd seule ne marchait pas).
+
+En comparant ip route r-agence avec ip route r-siege, on voit que siege a tous les reseaux et pas r-agence; il faut donc ajouter le reseau du vlan20 au routeur agence pour retablir le lien. 

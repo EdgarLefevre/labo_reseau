@@ -56,18 +56,21 @@ topology:
       exec:
         - ip addr add 10.10.10.10/24 dev eth1
         - ip route replace default via 10.10.10.1
+        - sh -c 'echo "nameserver 10.10.10.1" > /etc/resolv.conf'
     pc-srv:
       kind: linux
       image: nicolaka/netshoot
       exec:
         - ip addr add 10.10.20.10/24 dev eth1
         - ip route replace default via 10.10.20.1
+        - sh -c 'echo "nameserver 10.10.20.1" > /etc/resolv.conf'
     pc-a:
       kind: linux
       image: nicolaka/netshoot
       exec:
         - ip addr add 10.20.10.10/24 dev eth1
         - ip route replace default via 10.20.10.1
+        - sh -c 'echo "nameserver 10.20.10.1" > /etc/resolv.conf'
     inet:
       kind: linux
       image: nicolaka/netshoot
