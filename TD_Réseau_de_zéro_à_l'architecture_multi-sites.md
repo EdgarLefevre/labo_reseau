@@ -881,6 +881,15 @@ Symptôme : certains pings marchent, d’autres non, de façon inexplicable. Che
 
 **Incident 3 : route manquante**
 
+*Avant de commencer* : l’image FRR n’a pas de fichier `/etc/frr/vtysh.conf`, et `vtysh -c "conf t"` échoue sans lui (`Configuration file[/etc/frr/frr.conf] processing failure: 11`, le code 11 signifie « fichier introuvable »). Crée-le, puis vérifie que la ligne à supprimer existe bien dans la configuration :
+
+```bash
+docker exec clab-td3-r-siege touch /etc/frr/vtysh.conf
+docker exec clab-td3-r-siege vtysh -c "show running-config" | grep -A6 "router ospf"
+```
+
+Si `network 10.10.20.0/24 area 0` n’apparaît pas, la panne n’aura aucun effet : le VLAN 20 n’était pas annoncé à l’agence. Corrige alors ton `frr.conf` (séance 4) avant de continuer. Pour réparer à la fin de l’incident : `vtysh -c "conf t" -c "router ospf" -c "network 10.10.20.0/24 area 0"`.
+
 ```bash
 docker exec clab-td3-r-siege vtysh -c "conf t" -c "router ospf" -c "no network 10.10.20.0/24 area 0"
 ```

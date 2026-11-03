@@ -7,5 +7,21 @@ RAS
 ## TD3 
 Soucis de paquet, tcpdump n'etait pas installé, conf modifiée dans topology.yml (et dans le .md du labo)
 ## TD4
-Soucis de résolution dns pour ping le pc-srv depuis pc-user.
+### Seance 5
+Soucis de résolution dns pour ping le pc-srv depuis pc-user (dig marche mais pas ping, ping ip marche mais pas ping nom de domaine).
 nslookup montre que le nxdomain n'etait pas bon -> dnsmasq conf pas bonne, il ne faut pas utiliser address dans ce cas mais host-record. 
+### Seance 6 
+#### Bug 1
+Ping pc a ne marche pas
+Ping r-agence ne marche pas 
+Ping r-siege marche
+
+ip link sur le routeur r-siege montre eth2 down -> liaison cassée, verifier cable
+#### Bug 2 
+PC-user ne peut ping personne mais pc-srv peut ping pc-a (reseau fonctionne entre les 2 routeurs)
+Comparaison de ip route sur PC-user et R-siege, on voit que les masques reseaux ne correspondent pas. Je modifie sur PC-user (pc-srv peut ping pc-a donc je suppose que le routeur est bien configuré)
+
+Une fois le masque modifié, je ne peux toujours pas ping les autres pc. 
+Il manque la route par default qui a été supprimée par le flush. Il faut l'ajouter.
+
+#### Bug 3
