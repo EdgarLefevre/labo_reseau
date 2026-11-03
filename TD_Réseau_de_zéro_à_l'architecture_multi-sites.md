@@ -801,10 +801,16 @@ docker exec clab-td3-pc-user udhcpc -i eth1 -n -q     # ou : dhclient -v eth1
 docker exec clab-td3-pc-user ip addr show eth1        # une adresse entre .100 et .200
 docker exec clab-td3-pc-user ip route                 # la passerelle a été configurée
 
-# Le DNS
+# Le DNS : dig interroge directement le serveur indiqué avec @
 docker exec clab-td3-pc-user dig @10.10.10.1 srv.lab.local +short    # 10.10.20.10
-docker exec clab-td3-pc-user ping -c 2 srv.lab.local
+
+# ping, lui, utilise /etc/resolv.conf : dans un conteneur, udhcpc ne le met pas à jour
+docker exec clab-td3-pc-user cat /etc/resolv.conf     # un autre serveur que 10.10.10.1
+docker exec clab-td3-pc-user sh -c 'echo "nameserver 10.10.10.1" > /etc/resolv.conf'
+docker exec clab-td3-pc-user ping -c 2 srv.lab.local  # fonctionne maintenant
 ```
+
+Sur un vrai poste, le client DHCP écrit lui-même le serveur DNS dans la configuration de la machine. Ici, c’est un conteneur dont Docker gère `resolv.conf` : on le fait à la main. Retiens l’idée générale : `dig @serveur` teste **le serveur DNS**, alors que `ping nom` teste **la configuration DNS du poste**. Quand l’un marche et pas l’autre, le problème est côté poste.
 
 **Étape 5 : voir les quatre messages.** Dans un second terminal, lance la capture, puis relance `udhcpc` :
 
