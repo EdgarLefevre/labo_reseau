@@ -53,27 +53,6 @@ topology:
         - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat dnsmasq
         - sh -c 'nft add table ip nat && nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } && nft add rule ip nat postrouting oifname "eth2" masquerade'
         - dnsmasq
-    pc-user:
-      kind: linux
-      image: nicolaka/netshoot
-      exec:
-        - ip addr add 10.10.10.10/24 dev eth1
-        - ip route replace default via 10.10.10.1
-        - sh -c 'echo "nameserver 10.10.10.1" > /etc/resolv.conf'
-    pc-srv:
-      kind: linux
-      image: nicolaka/netshoot
-      exec:
-        - ip addr add 10.10.20.10/24 dev eth1
-        - ip route replace default via 10.10.20.1
-        - sh -c 'echo "nameserver 10.10.20.1" > /etc/resolv.conf'
-    pc-a:
-      kind: linux
-      image: nicolaka/netshoot
-      exec:
-        - ip addr add 10.20.10.10/24 dev eth1
-        - ip route replace default via 10.20.10.1
-        - sh -c 'echo "nameserver 10.20.10.1" > /etc/resolv.conf'
     isp-a:
       kind: linux
       image: quay.io/frrouting/frr:10.2.1
@@ -109,10 +88,44 @@ topology:
         - ip addr add 192.0.2.2/30 dev eth1
         - ip addr add 192.0.2.6/30 dev eth2
         - ip addr add 192.0.2.9/30 dev eth3
+        - ip addr add 192.0.2.13/30 dev eth4
         - ip route replace 198.51.100.0/30 via 192.0.2.1
         - ip route replace 203.0.113.0/30 via 192.0.2.5
         - ip addr add 8.8.8.8/32 dev lo
         - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat dnsmasq
+    pc-user:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.10.10/24 dev eth1
+        - ip route replace default via 10.10.10.1
+        - sh -c 'echo "nameserver 10.10.10.1" > /etc/resolv.conf'
+    pc-srv:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.20.10/24 dev eth1
+        - ip route replace default via 10.10.20.1
+        - sh -c 'echo "nameserver 10.10.20.1" > /etc/resolv.conf'
+    pc-a:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.20.10.10/24 dev eth1
+        - ip route replace default via 10.20.10.1
+        - sh -c 'echo "nameserver 10.20.10.1" > /etc/resolv.conf'
+    attacker:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 192.0.2.14/24 dev eth1
+        - ip route replace default via 192.0.2.13
+    dmz-srv:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.30.10/24 dev eth1
+        - ip route replace default via 10.10.30.1
   links:
     - endpoints: ["pc-user:eth1", "sw1:eth1"]
     - endpoints: ["pc-srv:eth1", "sw1:eth2"]
@@ -123,4 +136,6 @@ topology:
     - endpoints: ["isp-a:eth2", "internet:eth1"]
     - endpoints: ["isp-b:eth2", "internet:eth2"]
     - endpoints: ["internet:eth3", "r-agence:eth2"]
+    - endpoints: ["internet:eth4", "attacker:eth1"]
+    - endpoints: ["dmz-srv:eth1", "r-siege:eth4"]
   
