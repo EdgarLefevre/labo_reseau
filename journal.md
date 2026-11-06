@@ -30,3 +30,6 @@ Le fichier resolv.conf n'etait pas bon sur pc-srv et pc-a, modification de topol
 En comparant ip route r-agence avec ip route r-siege, on voit que siege a tous les reseaux et pas r-agence; il faut donc ajouter le reseau du vlan20 au routeur agence pour retablir le lien. 
 ### Seance 7 
 Pas de soucis avec topology.yml, je n'avais pas enlevé le ospf donc les pcs pouvaient se ping entre eux (pas bon, si un seul routeur / site pas de ospf).
+### Seance 8 
+Le sujet n'etait pas clair (avec des coquilles), j'ai passé pas mal de temps à obtenir les resultats voulus. 
+Le fichier firewall n'est pas encore bien maitrisé.

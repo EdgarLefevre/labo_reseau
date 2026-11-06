@@ -19,6 +19,7 @@ table inet filter {
     # LAN utilisateurs
     iifname "eth1.10" oifname { "eth3", "eth4" } accept
     iifname "eth1.10" oifname "eth1.20" tcp dport { 80, 443 } accept
+    iifname "eth1.10" oifname "eth1.20" icmp type echo-request accept
 
     # Internet vers DMZ (apres DNAT : adresse de destination 10.10.30.10)
     iifname { "eth3", "eth4" } oifname "eth5" ip daddr 10.10.30.10 tcp dport 443 accept

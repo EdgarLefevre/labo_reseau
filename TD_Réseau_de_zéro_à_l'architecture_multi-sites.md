@@ -1271,9 +1271,12 @@ docker exec clab-td4-r-siege ip -br addr        # une interface avec 10.10.30.1/
 **Tester les flux internes avec `nc` (netcat).** Pour savoir si une règle autorise ou bloque un flux, `ping` ne suffit pas : il ne teste que l’ICMP. `nc` ouvre une connexion TCP vers un port précis (`-z` : tester sans envoyer de données, `-v` : afficher le résultat, `-w2` : abandonner après 2 secondes).
 
 ```bash
-docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 443    # autorisé par le pare-feu
-docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 22     # bloqué par le pare-feu
-docker exec clab-td4-pc-srv  nc -zv -w2 10.10.10.10 443    # bloqué : serveur vers utilisateurs
+# Un service qui écoute sur le port 443 de pc-srv, pour que le test d’un flux autorisé réussisse
+docker exec -d clab-td4-pc-srv socat TCP-LISTEN:443,fork,reuseaddr SYSTEM:"echo ok"
+
+docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 443    # autorisé : affiche « succeeded »
+docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 22     # bloqué : timeout
+docker exec clab-td4-pc-srv  nc -zv -w2 10.10.10.10 443    # bloqué (serveurs vers utilisateurs) : timeout
 ```
 
 | Résultat | Signification |
@@ -1288,7 +1291,7 @@ La différence entre *refused* et *timeout* est la meilleure preuve qu’une rè
 
 ```bash
 docker exec clab-td4-attacker nmap -Pn -p 22,80,443,3389 198.51.100.2
-docker exec clab-td4-attacker curl -sk --max-time 3 https://198.51.100.2 || true
+docker exec clab-td4-attacker curl -sk --max-time 3 http://198.51.100.2:443 || true
 ```
 
 ### Questions

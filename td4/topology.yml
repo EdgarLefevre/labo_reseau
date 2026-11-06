@@ -35,9 +35,9 @@ topology:
         - ip addr add 10.10.20.1/24 dev eth1.20
         - ip link set eth1.10 up
         - ip link set eth1.20 up
-        - ip addr add 198.51.100.2/30 dev eth2
-        - ip addr add 203.0.113.2/30 dev eth3
-        - ip addr add 10.10.30.1/24 dev eth4
+        - ip addr add 198.51.100.2/30 dev eth3
+        - ip addr add 203.0.113.2/30 dev eth4
+        - ip addr add 10.10.30.1/24 dev eth5
         - ip route replace default via 198.51.100.1
         - sh -c 'nft add table ip nat && nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } && nft add rule ip nat postrouting oifname "eth2" masquerade && nft add rule ip nat postrouting oifname "eth3" masquerade'
         - sh -c 'nft -f /firewall.nft'
@@ -129,16 +129,17 @@ topology:
       exec:
         - ip addr add 10.10.30.10/24 dev eth1
         - ip route replace default via 10.10.30.1
+        - socat TCP-LISTEN:443,fork,reuseaddr SYSTEM:"echo ok"
   links:
     - endpoints: ["pc-user:eth1", "sw1:eth1"]
     - endpoints: ["pc-srv:eth1", "sw1:eth2"]
     - endpoints: ["sw1:eth3", "r-siege:eth1"]
     - endpoints: ["pc-a:eth1", "r-agence:eth1"]
-    - endpoints: ["r-siege:eth2", "isp-a:eth1"]
-    - endpoints: ["r-siege:eth3", "isp-b:eth1"]
+    - endpoints: ["r-siege:eth3", "isp-a:eth1"]
+    - endpoints: ["r-siege:eth4", "isp-b:eth1"]
     - endpoints: ["isp-a:eth2", "internet:eth1"]
     - endpoints: ["isp-b:eth2", "internet:eth2"]
     - endpoints: ["internet:eth3", "r-agence:eth2"]
     - endpoints: ["internet:eth4", "attacker:eth1"]
-    - endpoints: ["srv-dmz:eth1", "r-siege:eth4"]
+    - endpoints: ["srv-dmz:eth1", "r-siege:eth5"]
   
