@@ -1262,6 +1262,30 @@ docker exec clab-td4-srv-dmz curl -s http://127.0.0.1:443   # DMZ OK
 
 Pourquoi un fichier ? `socat` utilise les caractères `:` et `,` comme séparateurs dans ses arguments : un `Content-Length: 7` écrit directement dans la commande la coupe en deux. Ce serveur n’existe que tant que le conteneur tourne : relance-le après chaque `deploy`. Pour qu’il démarre tout seul, tu peux le mettre dans l’`exec` de `srv-dmz` dans la topologie.
 
+**Démarrer ce serveur automatiquement avec la topologie.** Une ligne `socat …` placée directement dans l’`exec` ne convient pas : `socat` ne se termine jamais, et Containerlab attend la fin de chaque commande. Lance-le en arrière-plan depuis un script. Crée `td4/srv-dmz/start.sh` :
+
+```sh
+#!/bin/sh
+printf 'HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\nDMZ OK\n' > /tmp/reponse.txt
+nohup socat TCP-LISTEN:443,fork,reuseaddr SYSTEM:"cat /tmp/reponse.txt" > /dev/null 2>&1 &
+```
+
+Puis, dans `topology.yml` (le script est monté dans le conteneur et lancé en dernier ; l’installation de paquets est inutile ici, `netshoot` contient déjà `socat`) :
+
+```yaml
+    srv-dmz:
+      kind: linux
+      image: nicolaka/netshoot
+      binds:
+        - srv-dmz/start.sh:/start.sh
+      exec:
+        - ip addr add 10.10.30.10/24 dev eth1
+        - ip route replace default via 10.10.30.1
+        - sh /start.sh
+```
+
+Le script évite aussi un piège YAML : un `Content-Length: 7` écrit directement dans une ligne `exec` contient « deux-points + espace », que YAML lit comme une clé de dictionnaire et refuse.
+
 **Avant le scan, vérifie que le routeur a bien une adresse dans la DMZ** (sans elle, la redirection n’a nulle part où envoyer les paquets, et le port 443 reste `filtered`) :
 
 ```bash
@@ -1291,7 +1315,7 @@ La différence entre *refused* et *timeout* est la meilleure preuve qu’une rè
 
 ```bash
 docker exec clab-td4-attacker nmap -Pn -p 22,80,443,3389 198.51.100.2
-docker exec clab-td4-attacker curl -sk --max-time 3 http://198.51.100.2:443 || true
+docker exec clab-td4-attacker curl -s --max-time 3 http://198.51.100.2:443     # affiche DMZ OK (HTTP simple sur le port 443 : notre serveur n’a pas de TLS)
 ```
 
 ### Questions
@@ -1327,35 +1351,38 @@ Le siège et l’agence sont reliés **à travers Internet**, un réseau public.
 (Si `wg` est absent du conteneur, installe-le avec `apk add wireguard-tools`.)
 
 ```bash
-# --- Générer les clés (sur ton hôte, par exemple) ---
-wg genkey | tee priv_s | wg pubkey > pub_s
-wg genkey | tee priv_a | wg pubkey > pub_a
+# 1. Générer une paire de clés dans chaque routeur (la clé privée ne quitte jamais son routeur)
+for r in r-siege r-agence; do
+  docker exec clab-td4-$r sh -c 'umask 077; wg genkey > /priv; wg pubkey < /priv > /pub'
+done
 
-# --- Siège (r-siege) ---
-docker cp priv_s clab-td4-r-siege:/priv
-docker exec clab-td4-r-siege sh -c '
+# 2. Récupérer les deux clés PUBLIQUES (elles peuvent s’échanger sans risque)
+PUB_S=$(docker exec clab-td4-r-siege cat /pub)
+PUB_A=$(docker exec clab-td4-r-agence cat /pub)
+echo "siège : $PUB_S"
+echo "agence : $PUB_A"
+
+# 3. Siège : le pair est l’agence, dont on donne la clé publique
+docker exec clab-td4-r-siege sh -c "
 ip link add wg0 type wireguard
 ip addr add 10.99.0.1/30 dev wg0
-wg set wg0 listen-port 51820 private-key /priv \
-  peer '"$(cat pub_a)"' allowed-ips 10.99.0.2/32,10.20.10.0/24 \
-  endpoint 192.0.2.10:51820 persistent-keepalive 25
+wg set wg0 listen-port 51820 private-key /priv peer $PUB_A allowed-ips 10.99.0.2/32,10.20.10.0/24 endpoint 192.0.2.10:51820 persistent-keepalive 25
 ip link set wg0 up mtu 1380
 ip route add 10.20.10.0/24 dev wg0
-'
+"
 
-# --- Agence (r-agence) ---
-docker cp priv_a clab-td4-r-agence:/priv
-docker exec clab-td4-r-agence sh -c '
+# 4. Agence : le pair est le siège, dont on donne la clé publique
+docker exec clab-td4-r-agence sh -c "
 ip link add wg0 type wireguard
 ip addr add 10.99.0.2/30 dev wg0
-wg set wg0 listen-port 51820 private-key /priv \
-  peer '"$(cat pub_s)"' allowed-ips 10.99.0.1/32,10.10.10.0/24,10.10.20.0/24 \
-  endpoint 198.51.100.2:51820 persistent-keepalive 25
+wg set wg0 listen-port 51820 private-key /priv peer $PUB_S allowed-ips 10.99.0.1/32,10.10.10.0/24,10.10.20.0/24 endpoint 198.51.100.2:51820 persistent-keepalive 25
 ip link set wg0 up mtu 1380
 ip route add 10.10.10.0/24 dev wg0
 ip route add 10.10.20.0/24 dev wg0
-'
+"
 ```
+
+**Comprendre les fichiers de clés.** Chaque routeur a deux fichiers : `/priv` (sa clé **privée**, qui ne doit jamais être copiée ni commitée) et `/pub` (sa clé **publique**, qu’on donne à l’autre bout). Dans la commande `wg set`, `private-key /priv` désigne ta propre clé privée, et `peer <clé>` la clé **publique** de l’autre routeur : sur le siège, on met donc la clé publique de l’agence (`$PUB_A`), et inversement. Les variables `PUB_S` et `PUB_A` n’existent que dans le terminal où tu les as créées : si tu ouvres un autre terminal, relance les deux lignes `docker exec … cat /pub`. Tout est perdu à chaque `destroy` : refais les étapes 1 à 4. Les noms d’interface de tes règles `nftables` doivent correspondre à ta topologie ; la règle qui autorise UDP 51820 doit viser tes interfaces vers les opérateurs.
 
 Un `mtu 1380` (au lieu de 1500) laisse la place pour l’en-tête d’encapsulation ; un MTU trop grand provoque des problèmes subtils (grosses requêtes qui bloquent, petits pings qui passent).
 
