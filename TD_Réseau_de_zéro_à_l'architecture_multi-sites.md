@@ -1172,7 +1172,7 @@ Pour le pare-feu on utilise **nftables**, l’outil par défaut sous Linux réce
 | Source → Destination | Autorisé ? | Port |
 | --- | --- | --- |
 | LAN utilisateurs → Internet | Oui | tout |
-| LAN utilisateurs → LAN serveurs | Oui | TCP 80, 443 |
+| LAN utilisateurs → LAN serveurs | Oui | TCP 80, 443 et ping (ICMP echo) |
 | LAN serveurs → LAN utilisateurs | Non (sauf réponses) | – |
 | Internet → DMZ | Oui | TCP 443 uniquement |
 | DMZ → LAN (tous) | Non | – |
@@ -1206,6 +1206,7 @@ table inet filter {
     # LAN utilisateurs
     iifname "eth1.10" oifname { "eth3", "eth4" } accept
     iifname "eth1.10" oifname "eth1.20" tcp dport { 80, 443 } accept
+    iifname "eth1.10" oifname "eth1.20" icmp type echo-request accept
 
     # Internet vers DMZ (apres DNAT : adresse de destination 10.10.30.10)
     iifname { "eth3", "eth4" } oifname "eth5" ip daddr 10.10.30.10 tcp dport 443 accept
@@ -1266,6 +1267,22 @@ Pourquoi un fichier ? `socat` utilise les caractères `:` et `,` comme séparate
 ```bash
 docker exec clab-td4-r-siege ip -br addr        # une interface avec 10.10.30.1/24
 ```
+
+**Tester les flux internes avec `nc` (netcat).** Pour savoir si une règle autorise ou bloque un flux, `ping` ne suffit pas : il ne teste que l’ICMP. `nc` ouvre une connexion TCP vers un port précis (`-z` : tester sans envoyer de données, `-v` : afficher le résultat, `-w2` : abandonner après 2 secondes).
+
+```bash
+docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 443    # autorisé par le pare-feu
+docker exec clab-td4-pc-user nc -zv -w2 10.10.20.10 22     # bloqué par le pare-feu
+docker exec clab-td4-pc-srv  nc -zv -w2 10.10.10.10 443    # bloqué : serveur vers utilisateurs
+```
+
+| Résultat | Signification |
+| --- | --- |
+| `open` | Le flux passe et un service écoute sur ce port |
+| `Connection refused` | Le flux **passe** (le pare-feu l’autorise), mais aucun service n’écoute |
+| Aucune réponse (timeout) | Le pare-feu a **jeté** le paquet (`drop`) |
+
+La différence entre *refused* et *timeout* est la meilleure preuve qu’une règle autorise ou bloque : sur le port 443 des serveurs tu dois obtenir *refused* ou *open*, sur le port 22 un timeout.
 
 **Test depuis l’« Internet » (nœud `attacker`)** :
 
