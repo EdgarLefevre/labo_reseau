@@ -25,7 +25,6 @@ topology:
         - r-siege/frr.conf:/etc/frr/frr.conf
         - firewall.nft:/firewall.nft
         - dnsmasq.conf:/etc/dnsmasq.conf
-        - r-siege/priv_s:/priv
       exec:
         - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat dnsmasq
         - sysctl -w net.ipv4.ip_forward=1
@@ -43,14 +42,13 @@ topology:
         - sh -c 'nft add table ip nat && nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } && nft add rule ip nat postrouting oifname "eth2" masquerade && nft add rule ip nat postrouting oifname "eth3" masquerade'
         - sh -c 'nft -f /firewall.nft'
         - dnsmasq
-        - sh -c 'ip link add wg0 type wireguard && ip addr add 10.99.0.1/30 dev wg0 && wg set wg0 listen-port 51820 private-key /priv peer '"$(cat pub_a)"' allowed-ips 10.99.0.2/32,10.20.10.0/24 endpoint 192.0.2.10:51820 persistent-keepalive 25 && ip link set wg0 up mtu 1380 && ip route add 10.20.10.0/24 dev wg0'
+        - sh -c 'umask 077; wg genkey > /priv; wg pubkey < /priv > /pub'
     r-agence:
       kind: linux
       image: quay.io/frrouting/frr:10.2.1
       binds:
         - r-agence/daemons:/etc/frr/daemons
         - r-agence/frr.conf:/etc/frr/frr.conf
-        - r-agence/priv_a:/priv
       exec:
         - sysctl -w net.ipv4.ip_forward=1
         - ip addr add 10.20.10.1/24 dev eth1
@@ -59,7 +57,7 @@ topology:
         - apk add --no-cache tcpdump nftables wireguard-tools iperf3 socat dnsmasq
         - sh -c 'nft add table ip nat && nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } && nft add rule ip nat postrouting oifname "eth2" masquerade'
         - dnsmasq
-        - sh -c 'ip link add wg0 type wireguard && ip addr add 10.99.0.2/30 dev wg0 && wg set wg0 listen-port 51820 private-key /priv peer '"$(cat pub_s)"' allowed-ips 10.99.0.1/32,10.10.10.0/24,10.10.20.0/24 endpoint 198.51.100.2:51820 persistent-keepalive 25 && ip link set wg0 up mtu 1380 && ip route add 10.10.10.0/24 dev wg0 && ip route add 10.10.20.0/24 dev wg0'
+        - sh -c 'umask 077; wg genkey > /priv; wg pubkey < /priv > /pub'
     isp-a:
       kind: linux
       image: quay.io/frrouting/frr:10.2.1

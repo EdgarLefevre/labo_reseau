@@ -1359,28 +1359,39 @@ done
 # 2. Récupérer les deux clés PUBLIQUES (elles peuvent s’échanger sans risque)
 PUB_S=$(docker exec clab-td4-r-siege cat /pub)
 PUB_A=$(docker exec clab-td4-r-agence cat /pub)
-echo "siège : $PUB_S"
-echo "agence : $PUB_A"
+echo "siège : [$PUB_S]"
+echo "agence : [$PUB_A]"          # chaque clé : un seul mot, 44 caractères, finissant par =
 
 # 3. Siège : le pair est l’agence, dont on donne la clé publique
-docker exec clab-td4-r-siege sh -c "
-ip link add wg0 type wireguard
-ip addr add 10.99.0.1/30 dev wg0
-wg set wg0 listen-port 51820 private-key /priv peer $PUB_A allowed-ips 10.99.0.2/32,10.20.10.0/24 endpoint 192.0.2.10:51820 persistent-keepalive 25
-ip link set wg0 up mtu 1380
-ip route add 10.20.10.0/24 dev wg0
-"
+#    (si wg0 existe déjà d’une tentative précédente : docker exec $R ip link del wg0)
+R=clab-td4-r-siege
+docker exec $R ip link add wg0 type wireguard
+docker exec $R ip addr add 10.99.0.1/30 dev wg0
+docker exec $R wg set wg0 listen-port 51820
+docker exec $R wg set wg0 private-key /priv
+docker exec $R wg set wg0 peer "$PUB_A" allowed-ips 10.99.0.2/32,10.20.10.0/24
+docker exec $R wg set wg0 peer "$PUB_A" endpoint 192.0.2.10:51820
+docker exec $R wg set wg0 peer "$PUB_A" persistent-keepalive 25
+docker exec $R ip link set wg0 up mtu 1380
+docker exec $R ip route add 10.20.10.0/24 dev wg0
+docker exec $R wg show
 
 # 4. Agence : le pair est le siège, dont on donne la clé publique
-docker exec clab-td4-r-agence sh -c "
-ip link add wg0 type wireguard
-ip addr add 10.99.0.2/30 dev wg0
-wg set wg0 listen-port 51820 private-key /priv peer $PUB_S allowed-ips 10.99.0.1/32,10.10.10.0/24,10.10.20.0/24 endpoint 198.51.100.2:51820 persistent-keepalive 25
-ip link set wg0 up mtu 1380
-ip route add 10.10.10.0/24 dev wg0
-ip route add 10.10.20.0/24 dev wg0
-"
+R=clab-td4-r-agence
+docker exec $R ip link add wg0 type wireguard
+docker exec $R ip addr add 10.99.0.2/30 dev wg0
+docker exec $R wg set wg0 listen-port 51820
+docker exec $R wg set wg0 private-key /priv
+docker exec $R wg set wg0 peer "$PUB_S" allowed-ips 10.99.0.1/32,10.10.10.0/24,10.10.20.0/24
+docker exec $R wg set wg0 peer "$PUB_S" endpoint 198.51.100.2:51820
+docker exec $R wg set wg0 peer "$PUB_S" persistent-keepalive 25
+docker exec $R ip link set wg0 up mtu 1380
+docker exec $R ip route add 10.10.10.0/24 dev wg0
+docker exec $R ip route add 10.10.20.0/24 dev wg0
+docker exec $R wg show
 ```
+
+**Pourquoi une option par commande ?** Une commande `wg set` qui regroupe toutes les options (port, clé privée, pair, endpoint, keepalive) a produit chez un utilisateur l’erreur `fopen: Permission denied`, alors que les mêmes options passées une par une fonctionnent. La cause exacte n’est pas identifiée ; séparer les commandes est la méthode qui marche, et elle a l’avantage de montrer immédiatement laquelle échoue en cas de problème.
 
 **Comprendre les fichiers de clés.** Chaque routeur a deux fichiers : `/priv` (sa clé **privée**, qui ne doit jamais être copiée ni commitée) et `/pub` (sa clé **publique**, qu’on donne à l’autre bout). Dans la commande `wg set`, `private-key /priv` désigne ta propre clé privée, et `peer <clé>` la clé **publique** de l’autre routeur : sur le siège, on met donc la clé publique de l’agence (`$PUB_A`), et inversement. Les variables `PUB_S` et `PUB_A` n’existent que dans le terminal où tu les as créées : si tu ouvres un autre terminal, relance les deux lignes `docker exec … cat /pub`. Tout est perdu à chaque `destroy` : refais les étapes 1 à 4. Les noms d’interface de tes règles `nftables` doivent correspondre à ta topologie ; la règle qui autorise UDP 51820 doit viser tes interfaces vers les opérateurs.
 

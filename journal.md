@@ -33,3 +33,5 @@ Pas de soucis avec topology.yml, je n'avais pas enlevé le ospf donc les pcs pou
 ### Seance 8 
 Le sujet n'etait pas clair (avec des coquilles), j'ai passé pas mal de temps à obtenir les resultats voulus. 
 Le fichier firewall n'est pas encore bien maitrisé.
+### Seance 9 
+Concept clairs, le sujet faisait la configuration avec des one-liners qui ne passaient pas, en faisant plusieurs commandes c'est passé.
