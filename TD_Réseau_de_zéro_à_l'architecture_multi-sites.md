@@ -981,6 +981,159 @@ Le LAN (sw1, pc-user, pc-srv) et l’agence (`10.20.10.0/24`) reprennent le TD3.
 
 **Outils sur les routeurs.** Dans la ligne `apk add` de l’`exec` de `r-siege` et de `r-agence`, installe tout ce qui servira : `apk add --no-cache tcpdump nftables wireguard-tools iperf3`. Cette ligne doit rester **la première** : une fois la route par défaut de gestion supprimée (étape 2), `apk` n’a plus accès à Internet.
 
+**Fichiers de référence de la séance 7.** Essaie d’abord d’écrire ta propre `topology.yml`, puis compare. Ces fichiers vont dans `td4/`. Points importants : le lien direct `r-siege ↔ r-agence` n’existe plus, `r-siege` n’a pas d’`eth2`, et OSPF n’est plus configuré (il n’y a plus de voisin).
+
+`td4/r-siege/frr.conf` (idem pour `r-agence`, avec `hostname r-agence`) :
+
+```
+frr defaults traditional
+hostname r-siege
+log stdout
+service integrated-vtysh-config
+!
+line vty
+!
+```
+
+`td4/r-siege/daemons` et `td4/r-agence/daemons` : copie ceux du TD3.
+
+`td4/topology.yml` :
+
+```yaml
+name: td4
+topology:
+  nodes:
+    sw1:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip link add br0 type bridge vlan_filtering 1
+        - ip link set eth1 master br0
+        - ip link set eth2 master br0
+        - ip link set eth3 master br0
+        - ip link set br0 up
+        - bridge vlan add dev eth1 vid 10 pvid untagged
+        - bridge vlan add dev eth2 vid 20 pvid untagged
+        - bridge vlan add dev eth3 vid 10
+        - bridge vlan add dev eth3 vid 20
+        - bridge vlan del dev eth1 vid 1
+        - bridge vlan del dev eth2 vid 1
+        - bridge vlan del dev eth3 vid 1
+    r-siege:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-siege/daemons:/etc/frr/daemons
+        - r-siege/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sh -c "apk add --no-cache tcpdump nftables wireguard-tools iperf3 && touch /etc/frr/vtysh.conf && sysctl -w net.ipv4.ip_forward=1"
+        - ip link set eth1 up
+        - ip link add link eth1 name eth1.10 type vlan id 10
+        - ip link add link eth1 name eth1.20 type vlan id 20
+        - ip addr add 10.10.10.1/24 dev eth1.10
+        - ip addr add 10.10.20.1/24 dev eth1.20
+        - ip link set eth1.10 up
+        - ip link set eth1.20 up
+        - ip addr add 198.51.100.2/30 dev eth3
+        - ip addr add 203.0.113.2/30 dev eth4
+        - ip addr add 10.10.30.1/24 dev eth5
+        - ip route replace default via 198.51.100.1 dev eth3
+        - sh -c "nft add table ip nat && nft add chain ip nat postrouting '{ type nat hook postrouting priority 100 ; }' && nft add rule ip nat postrouting oifname eth3 masquerade && nft add rule ip nat postrouting oifname eth4 masquerade"
+    r-agence:
+      kind: linux
+      image: quay.io/frrouting/frr:10.2.1
+      binds:
+        - r-agence/daemons:/etc/frr/daemons
+        - r-agence/frr.conf:/etc/frr/frr.conf
+      exec:
+        - sh -c "apk add --no-cache tcpdump nftables wireguard-tools && touch /etc/frr/vtysh.conf && sysctl -w net.ipv4.ip_forward=1"
+        - ip addr add 10.20.10.1/24 dev eth1
+        - ip addr add 192.0.2.10/30 dev eth2
+        - ip route replace default via 192.0.2.9 dev eth2
+        - sh -c "nft add table ip nat && nft add chain ip nat postrouting '{ type nat hook postrouting priority 100 ; }' && nft add rule ip nat postrouting oifname eth2 masquerade"
+    isp-a:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 198.51.100.1/30 dev eth1
+        - ip addr add 192.0.2.1/30 dev eth2
+        - ip route replace default via 192.0.2.2 dev eth2
+    isp-b:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 203.0.113.1/30 dev eth1
+        - ip addr add 192.0.2.5/30 dev eth2
+        - ip route replace default via 192.0.2.6 dev eth2
+    internet:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - ip addr add 192.0.2.2/30 dev eth1
+        - ip addr add 192.0.2.6/30 dev eth2
+        - ip addr add 192.0.2.9/30 dev eth3
+        - ip addr add 192.0.2.13/30 dev eth4
+        - ip addr add 8.8.8.8/32 dev lo
+        - ip route add 198.51.100.0/30 via 192.0.2.1
+        - ip route add 203.0.113.0/30 via 192.0.2.5
+    attacker:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 192.0.2.14/30 dev eth1
+        - ip route replace default via 192.0.2.13 dev eth1
+    srv-dmz:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.30.10/24 dev eth1
+        - ip route replace default via 10.10.30.1 dev eth1
+    pc-user:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.10.10/24 dev eth1
+        - ip route replace default via 10.10.10.1
+    pc-srv:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.10.20.10/24 dev eth1
+        - ip route replace default via 10.10.20.1
+    pc-a:
+      kind: linux
+      image: nicolaka/netshoot
+      exec:
+        - ip addr add 10.20.10.10/24 dev eth1
+        - ip route replace default via 10.20.10.1
+  links:
+    - endpoints: ["pc-user:eth1", "sw1:eth1"]
+    - endpoints: ["pc-srv:eth1", "sw1:eth2"]
+    - endpoints: ["sw1:eth3", "r-siege:eth1"]
+    - endpoints: ["r-siege:eth3", "isp-a:eth1"]
+    - endpoints: ["r-siege:eth4", "isp-b:eth1"]
+    - endpoints: ["r-siege:eth5", "srv-dmz:eth1"]
+    - endpoints: ["isp-a:eth2", "internet:eth1"]
+    - endpoints: ["isp-b:eth2", "internet:eth2"]
+    - endpoints: ["internet:eth3", "r-agence:eth2"]
+    - endpoints: ["internet:eth4", "attacker:eth1"]
+    - endpoints: ["r-agence:eth1", "pc-a:eth1"]
+```
+
+**Vérifications attendues** (les noms de conteneurs commencent par `clab-td4-`) :
+
+```bash
+docker exec clab-td4-pc-user ping -c 2 8.8.8.8          # fonctionne, via isp-a
+docker exec clab-td4-pc-user traceroute -n 8.8.8.8      # 10.10.10.1, 198.51.100.1, 192.0.2.2
+docker exec clab-td4-pc-a ping -c 2 8.8.8.8             # fonctionne
+docker exec clab-td4-pc-a ping -c 2 10.10.10.10         # ÉCHOUE : c’est normal, pas encore de VPN
+```
+
+Le dernier test est ton vrai critère : s’il réussit, c’est qu’il reste un chemin direct entre les sites (lien `eth2` ou OSPF hérité du TD3). Le `ping` échoue ici parce que l’agence n’a aucune route vers `10.10.x.x` : le NAT ne fait sortir que vers Internet, et les adresses privées ne sont pas routées.
+
 ### Questions
 
 1. Pourquoi `internet` a-t-il besoin de routes vers `198.51.100.0/30` et `203.0.113.0/30` ?
@@ -1042,7 +1195,8 @@ table inet filter {
     iifname "eth0" accept                      # gestion Containerlab / supervision
     ip protocol icmp icmp type echo-request limit rate 10/second accept
     iifname { "eth3", "eth4" } udp dport 51820 accept   # WireGuard
-    log prefix "FW-INPUT-DROP " limit rate 5/second
+    counter
+    limit rate 5/second log prefix "FW-INPUT-DROP "
   }
 
   chain forward {
@@ -1065,7 +1219,8 @@ table inet filter {
     iifname "wg0" oifname "eth1.10" accept
     iifname "eth1.10" oifname "wg0" accept
 
-    log prefix "FW-FWD-DROP " limit rate 5/second
+    counter
+    limit rate 5/second log prefix "FW-FWD-DROP "
   }
 }
 
@@ -1093,8 +1248,23 @@ Charge-le : `docker cp td4/firewall.nft clab-td4-r-siege:/firewall.nft` puis `do
 **Serveur de test en DMZ** (ce n’est pas du vrai TLS ; l’objet est le port, pas le chiffrement) :
 
 ```bash
-docker exec -d clab-td4-srv-dmz socat TCP-LISTEN:443,fork,reuseaddr \
-  SYSTEM:'printf "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nDMZ OK\n"'
+# 1. La réponse HTTP dans un fichier
+docker exec clab-td4-srv-dmz sh -c "printf 'HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\nDMZ OK\n' > /tmp/reponse.txt"
+
+# 2. Le serveur renvoie ce fichier à chaque connexion sur le port 443
+docker exec -d clab-td4-srv-dmz socat TCP-LISTEN:443,fork,reuseaddr SYSTEM:"cat /tmp/reponse.txt"
+
+# 3. Vérifier
+docker exec clab-td4-srv-dmz ss -ltn                       # une ligne *:443
+docker exec clab-td4-srv-dmz curl -s http://127.0.0.1:443   # DMZ OK
+```
+
+Pourquoi un fichier ? `socat` utilise les caractères `:` et `,` comme séparateurs dans ses arguments : un `Content-Length: 7` écrit directement dans la commande la coupe en deux. Ce serveur n’existe que tant que le conteneur tourne : relance-le après chaque `deploy`. Pour qu’il démarre tout seul, tu peux le mettre dans l’`exec` de `srv-dmz` dans la topologie.
+
+**Avant le scan, vérifie que le routeur a bien une adresse dans la DMZ** (sans elle, la redirection n’a nulle part où envoyer les paquets, et le port 443 reste `filtered`) :
+
+```bash
+docker exec clab-td4-r-siege ip -br addr        # une interface avec 10.10.30.1/24
 ```
 
 **Test depuis l’« Internet » (nœud `attacker`)** :
@@ -1116,7 +1286,7 @@ docker exec clab-td4-attacker curl -sk --max-time 3 https://198.51.100.2 || true
 1. Les ports 22, 80, 3389 apparaissent `filtered` (le pare-feu ignore silencieusement les paquets), et 443 `open`. Un port `closed` répond activement « personne n’écoute ici » (RST) ; `filtered` ne répond rien : c’est le comportement d’un `drop`. En production, `drop` complique la tâche des scanners.
 2. Si le serveur exposé est compromis, l’attaquant serait déjà dans le réseau interne. La DMZ **limite le rayon d’explosion** : de là, aucun accès vers le LAN.
 3. La règle `forward` n’autorise `eth1.20 → eth1.10` que pour les réponses (`ct state established`). Une nouvelle connexion initiée par le serveur est refusée. Un serveur ne devrait pas initier de connexions vers les postes : c’est ce qui empêche un serveur compromis de se propager.
-4. Les lignes `log` produisent des messages noyau (`dmesg`). Dans un conteneur, on peut aussi utiliser `nft monitor trace` après avoir activé `meta nftrace set 1` sur le flux. Dans tous les cas : les refus doivent être *visibles* quelque part.
+4. Trois méthodes, de la plus simple à la plus détaillée. **(1) Les compteurs** : la règle `counter` placée juste avant le `log` de chaque chaîne compte les paquets refusés ; `nft list ruleset` montre le nombre grandir à chaque tentative. **(2) La trace** : `nft insert rule inet filter forward ip protocol icmp meta nftrace set 1`, puis `nft monitor trace` montre le chemin exact d’un paquet à travers les règles. Attention : `nft monitor` **seul** n’affiche que les *modifications* du jeu de règles, jamais le trafic. **(3) Les journaux** : les lignes `log` écrivent dans le journal du noyau, mais depuis un conteneur il faut d’abord activer sur ton hôte `sudo sysctl -w net.netfilter.nf_log_all_netns=1`, puis lire `sudo dmesg -w | grep FW-`. Dans tous les cas : les refus doivent être *visibles* quelque part.
 
 ### Checkpoint
 

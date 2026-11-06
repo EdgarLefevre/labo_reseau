@@ -1,0 +1,47 @@
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    ct state established,related accept
+    iifname "lo" accept
+    iifname "eth0" accept                      # gestion Containerlab / supervision
+    ip protocol icmp icmp type echo-request limit rate 10/second accept
+    iifname { "eth2", "eth3" } udp dport 51820 accept   # WireGuard
+    log prefix "FW-INPUT-DROP " limit rate 5/second
+  }
+
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+    ct state established,related accept
+
+    # LAN utilisateurs
+    iifname "eth1.10" oifname { "eth2", "eth3" } accept
+    iifname "eth1.10" oifname "eth1.20" tcp dport { 80, 443 } accept
+
+    # Internet vers DMZ (apres DNAT : adresse de destination 10.10.30.10)
+    iifname { "eth2", "eth3" } oifname "eth4" ip daddr 10.10.30.10 tcp dport 443 accept
+
+    # DMZ vers Internet (limite)
+    iifname "eth4" oifname { "eth2", "eth3" } tcp dport 443 accept
+    iifname "eth4" oifname { "eth2", "eth3" } udp dport 53 accept
+
+    # Agence via VPN
+    iifname "wg0" oifname "eth1.20" tcp dport 443 accept
+    iifname "wg0" oifname "eth1.10" accept
+    iifname "eth1.10" oifname "wg0" accept
+
+    log prefix "FW-FWD-DROP " limit rate 5/second
+  }
+}
+
+table ip nat {
+  chain prerouting {
+    type nat hook prerouting priority -100;
+    iifname { "eth2", "eth3" } tcp dport 443 dnat to 10.10.30.10
+  }
+  chain postrouting {
+    type nat hook postrouting priority 100;
+    oifname { "eth2", "eth3" } masquerade
+  }
+}
