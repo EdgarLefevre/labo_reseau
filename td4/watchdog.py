@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Surveille les deux liens operateurs et bascule la route par defaut."""
 import subprocess
 import time
@@ -15,7 +14,7 @@ state = {l["name"]: {"up": True, "fails": 0, "oks": 0} for l in LINKS}
 
 def sh(cmd: str) -> int:
     return subprocess.run(["docker", "exec", CONTAINER, "sh", "-c", cmd],
-                          capture_output=True).returncode
+                          check=False, capture_output=True).returncode
 
 
 def probe(link) -> bool:
@@ -43,7 +42,7 @@ def main():
                     sh(f"ip route replace default via {l['gw']} dev {l['dev']} metric {l['metric']}")
                     print(f"ip route replace default via {l['gw']} dev {l['dev']} metric {l['metric']}")
                     s["up"] = True
-                    subprocess.run(["docker", "exec", "clab-td4-isp-a", "sh", "-c", "ip route replace default via 192.0.2.2 dev eth2"], capture_output=True)
+                    subprocess.run(["docker", "exec", "clab-td4-isp-a", "sh", "-c", "ip route replace default via 192.0.2.2 dev eth2"], check=False, capture_output=True)
                     print(time.strftime("%H:%M:%S"), l["name"], "RETABLI")
             else:
                 s["oks"], s["fails"] = 0, s["fails"] + 1

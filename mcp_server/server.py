@@ -13,13 +13,13 @@ PROM = "http://localhost:9090"
 logging.basicConfig(filename="mcp_audit.log", level=logging.INFO,
                     format="%(asctime)s %(message)s")
 mcp = FastMCP("reseau-lab")
-
+logger = logging.getLogger("reseau_lab.audit")
 
 def audited(fn):
     """Journalise chaque appel d'outil."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        logging.info("tool=%s args=%s", fn.__name__, json.dumps(kwargs))
+        logger.info("tool=%s args=%s", fn.__name__, json.dumps(kwargs))
         return fn(*args, **kwargs)
     return wrapper
 
