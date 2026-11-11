@@ -1659,16 +1659,6 @@ Exporte le tableau de bord en JSON (*Dashboard settings → JSON Model*) et mets
 
 **Test des alertes** : coupe `isp-a` en amont (`ip link set eth2 down` sur `isp-a`) et observe dans l’onglet **Alerts** de Prometheus l’alerte `LienOperateurDown` passer de *Pending* à *Firing*. Bonus : ajoute Alertmanager avec un webhook vers un petit script Python qui affiche l’alerte.
 
-### Mini-recherche : le contexte de La Réunion (45 min)
-
-Rédige une note d’une demi-page qui répond aux questions suivantes en t’appuyant sur des sources vérifiables (par exemple la carte des câbles sous-marins de TeleGeography, les sites des opérateurs et de l’ARCEP) :
-
-1. Par quels câbles sous-marins La Réunion est-elle reliée au reste du monde ? Où atterrissent-ils ?
-2. Quels sont les ordres de grandeur de latence vers la métropole ? Et vers l’Afrique du Sud ?
-3. Que se passe-t-il si un câble est endommagé ? (Cherche des exemples d’incidents passés dans l’océan Indien.)
-4. En quoi cela justifie-t-il un double opérateur **avec des chemins physiques différents** ?
-
-Le but n’est pas de tout savoir : c’est de montrer au recruteur que tu as pensé le réseau **dans son contexte local**.
 
 ### Questions
 

@@ -30,8 +30,12 @@ Le fichier resolv.conf n'etait pas bon sur pc-srv et pc-a, modification de topol
 En comparant ip route r-agence avec ip route r-siege, on voit que siege a tous les reseaux et pas r-agence; il faut donc ajouter le reseau du vlan20 au routeur agence pour retablir le lien. 
 ### Seance 7 
 Pas de soucis avec topology.yml, je n'avais pas enlevé le ospf donc les pcs pouvaient se ping entre eux (pas bon, si un seul routeur / site pas de ospf).
-### Seance 8 
+### Seance 8 s
 Le sujet n'etait pas clair (avec des coquilles), j'ai passé pas mal de temps à obtenir les resultats voulus. 
 Le fichier firewall n'est pas encore bien maitrisé.
 ### Seance 9 
 Concept clairs, le sujet faisait la configuration avec des one-liners qui ne passaient pas, en faisant plusieurs commandes c'est passé.
+### Seance 10 
+RAS
+### Seance 11
+Les clefs publiques du VPN ont bougees, surement une mauvaise manip de ma part, point a checker si un vpn ne fonctionne plus. Grafana + prometheus + alerts -> Chose deja mise en place avec ROS pour la robocup et autres projets.

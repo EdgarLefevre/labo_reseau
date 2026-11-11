@@ -1,0 +1,23 @@
+groups:
+  - name: reseau
+    rules:
+      - alert: LienOperateurDown
+        expr: probe_success{cible=~"isp-."} == 0
+        for: 10s
+        annotations: {summary: "Lien {{ $labels.cible }} injoignable"}
+      - alert: TunnelVPNDown
+        expr: probe_success{cible="agence-vpn"} == 0
+        for: 15s
+        annotations: {summary: "Le VPN vers l'agence est tombé"}
+      - alert: LatenceElevee
+        expr: probe_duration_seconds{cible=~"isp-."} > 0.2
+        for: 2m
+        annotations: {summary: "Latence > 200 ms sur {{ $labels.cible }}"}
+      - alert: PerteDePaquets
+        expr: (1 - avg_over_time(probe_success[2m])) > 0.03
+        for: 1m
+        annotations: {summary: "Perte > 3 % sur {{ $labels.cible }}"}
+      - alert: InterfaceOperateurDown
+        expr: node_network_up{device=~"eth3|eth4"} == 0
+        for: 10s
+        annotations: {summary: "Interface {{ $labels.device }} hors service"}

@@ -1,0 +1,8 @@
+hostname ${hostname}
+!
+router ospf
+ ospf router-id ${router_id}
+%{ for n in networks ~}
+ network ${n} area 0
+%{ endfor ~}
+!

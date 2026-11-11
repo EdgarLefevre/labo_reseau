@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 5s
+rule_files:
+  - /etc/prometheus/rules.yml
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: ["172.20.20.10:9100"]
+  - job_name: probes
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets: ["192.0.2.2"]    # via ISP-A
+        labels: {cible: isp-a}
+      - targets: ["192.0.2.6"]    # via ISP-B
+        labels: {cible: isp-b}
+      - targets: ["10.20.10.10"]  # agence via VPN
+        labels: {cible: agence-vpn}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __address__
+        replacement: 172.20.20.10:9115

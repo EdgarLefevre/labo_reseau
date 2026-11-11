@@ -1,0 +1,10 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: recepteur-python
+    receivers:
+      - uid: recepteur-python-wh
+        type: webhook
+        settings:
+          url: http://172.20.20.1:5001/
+          httpMethod: POST
